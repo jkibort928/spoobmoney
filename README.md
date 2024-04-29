@@ -40,6 +40,3 @@ This program will take an input file, and spit out a space-separated list of the
 	Each line will be formatted as follows:
 		<name>: $<price> (<link>)
 
-	The parser is forgiving, and will operate on a simple space separated list as well:
-		<name> <price> <link>
-
