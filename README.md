@@ -13,11 +13,13 @@ Note: this readme sucks lol
 (very professional and cool installation instructions)
 
 # USAGE
-	spoobmoney [OPTIONS] <FILE>
+	spoobmoney [FLAGS] <FILE>
 
+	The program will error if no flags are specified.
 	(Note: Only one flag will be acknowledged by the program.)
 	(To avoid unintended output, please only specify a single flag.)
-	OPTIONS: 
+	
+	FLAGS: 
 		-h: 		Display this help message
 
 		--sum:		Output the total cost of the list

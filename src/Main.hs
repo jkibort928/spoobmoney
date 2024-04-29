@@ -4,6 +4,7 @@ import Control.Exception ( throw, Exception )
 import Control.Monad ( when, unless )
 --import Data.Char (isSpace)
 import Data.List ( intercalate )
+import Text.Read
 
 -- Error handling
 import Data.Typeable ( Typeable )
@@ -23,6 +24,14 @@ isWhitespace :: String -> Bool
 isWhitespace = all isSpace
 -}
 
+-- Operations for triples
+fst3 :: (a,b,c) -> a
+fst3 (x,_,_) = x
+snd3 :: (a,b,c) -> b
+snd3 (_,y,_) = y
+trd3 :: (a,b,c) -> c
+trd3 (_,_,z) = z
+
 helpMessage :: String
 helpMessage = "hai"
 
@@ -30,31 +39,24 @@ listToPrint :: [String] -> String
 listToPrint = unwords
 
 possibleFlags :: String
-possibleFlags = "hlme"
+possibleFlags = "h"
 possibleLFlags :: [String]
-possibleLFlags = ["all", "prospective", "optional", "unneeded"]
+possibleLFlags = ["sum", "names", "prices", "links"]
 
--- If the list is empty, return "", else it'll return the first element
-firstOrEmpty :: [String] -> String
-firstOrEmpty []         = ""
-firstOrEmpty (str:strs) = str
+-- triple: (name, cost, link)
 
--- Deletes all null strings from list
-deleteEmpty :: [String] -> [String]
-deleteEmpty = filter (not . null)
+-- If a triple has a null first element, it does not have a name
+hasName :: (String, String, String) -> Bool
+hasName (name, _, _) = (not . null) name
+
+-- Deletes all invalid triples from list
+deleteEmpty :: [(String, String, String)] -> [(String, String, String)]
+deleteEmpty = filter hasName
 
 -- Removes duplicate entries from a list
 removeDups :: forall a. Eq a => [a] -> [a]
 removeDups []       = []
 removeDups (x:xs)   = x : removeDups (filter (/= x) xs)
-
-isHeader :: String -> Bool
-isHeader [] = False
-isHeader (c:_) = c == '<'
-
--- Filters all headers out of the list
-filterAllHeaders :: [String] -> [String]
-filterAllHeaders = filter (not . isHeader)
 
 -- Trims one element off the left of a list
 trimL :: [a] -> [a]
@@ -66,57 +68,20 @@ trimR :: [a] -> [a]
 trimR l = reverse (helper [] l)
    where
       helper acc lis = case lis of
-         (x:[])    -> acc
-         (x:xs)    -> helper (x:acc) xs
-         otherwise -> acc
+         [x]        -> acc
+         (x:xs)     -> helper (x:acc) xs
+         _          -> acc
 
 -- Trims the left and right elements off a list 
 trimLR :: [a] -> [a]
 trimLR = trimR . trimL
 
--- Returns the strings that are included within the given modules
-specifyModules :: [String] -> [String] -> [String]
-specifyModules mods list = reverse (helper [] "" mods list)
-    where
-        helper acc currmod ms strs 
-            | currmod == "" = case strs of
-                (s:ss)
-                    | isHeader s && trimLR s `elem` ms    -> helper acc (trimLR s) ms ss  -- Feasible header found
-                    | otherwise                             -> helper acc ""         ms ss  -- Accept nothing until we find a feasible header
-                [] -> acc
-            | otherwise     = case strs of
-                (s:ss)
-                    | isHeader s && trimLR s == currmod   -> helper acc     ""      ms ss -- We hit the end of the module
-                    | isHeader s                            -> helper acc     currmod ms ss -- Skip headers
-                    | otherwise                             -> helper (s:acc) currmod ms ss -- Accept the string
-                [] -> acc
-
--- Returns the strings that are not included in the given modules
-excludeModules :: [String] -> [String] -> [String]
-excludeModules mods list = reverse (helper [] "" mods list)
-    where
-        helper acc currmod ms strs
-            | currmod == "" = case strs of
-                (s:ss)
-                    | isHeader s && trimLR s `elem` ms    -> helper acc     (trimLR s) ms ss -- Infeasible header found
-                    | isHeader s                            -> helper acc     ""         ms ss -- Skip headers
-                    | otherwise                             -> helper (s:acc) ""         ms ss -- Accept the string
-                [] -> acc
-            | otherwise     = case strs of
-                (s:ss)
-                    | isHeader s && trimLR s == currmod   -> helper acc ""      ms ss -- We hit the end of the module
-                    | otherwise                             -> helper acc currmod ms ss -- Accept nothing until we hit the end of the module
-                [] -> acc
-
--- Deletes every line except for the headers, and removes the angle brackets
-extractHeaders :: [String] -> [String]
-extractHeaders []   = []
-extractHeaders strs = map trimLR (filter isHeader strs)
-
+-- Ensure no invalid flags are passed
 checkFlags :: [Char] -> Bool
 checkFlags ""       = True
 checkFlags (f:fs)   = f `elem` possibleFlags && checkFlags fs
 
+-- I don't wanna use foldr here, it hurts my teeny brain when I look at it
 checkLFlags :: [String] -> Bool
 checkLFlags []          = True
 checkLFlags (lf:lfs)    = lf `elem` possibleLFlags && checkLFlags lfs
@@ -137,9 +102,7 @@ remove2Dash :: String -> String
 remove2Dash str = case str of
     (_:_:cs) -> cs
 
--- LFlag order: prospective, optional, unneeded
-type LFlags = (Bool, Bool, Bool)
-
+-- Parse the input to the program into argv, flags, and longflags
 parseArgs :: [String] -> ([String], String, [String])
 parseArgs []            = throw (Error "Error: No arguments specified")
 parseArgs strs = helper strs [] "" []
@@ -151,7 +114,7 @@ parseArgs strs = helper strs [] "" []
                 | otherwise     -> helper as (argv ++ [a])    flags                    longFlags
             []                  -> (argv, flags, longFlags)
 
-
+-- Ignore everything between /* */
 handleMultilines :: String -> String
 handleMultilines text = reverse (helper False [] text)
     where
@@ -166,28 +129,63 @@ handleMultilines text = reverse (helper False [] text)
                 | otherwise                     -> helper False (c:acc) cs
             []                                  -> acc
 
-handleComments :: LFlags -> String -> String
-handleComments lf [] = ""
-handleComments (fProspective, fOptional, fUnneeded) line = reverse (helper [] line)
+-- Ignore anything after a #
+handleComments :: String -> String
+handleComments [] = ""
+handleComments line = reverse (helper [] line)
     where
         helper acc str = case str of
-            (c1:c2:cs)
-                | c1 == '#'         -> acc
-                | [c1, c2] == "*#"  -> if fProspective then helper acc cs else acc
-                | [c1, c2] == "?#"  -> if fOptional then helper acc cs else acc
-                | [c1, c2] == "!#"  -> if fUnneeded then helper acc cs else acc
-                | otherwise         -> helper (c1:acc) (c2:cs) -- iterate once despite looking at 2
             (c:cs)
-                | c == '#'          -> acc
+                | c == '#'         -> acc
                 | otherwise         -> helper (c:acc) cs
             []                      -> acc
 
-parseRaw :: LFlags -> String -> [String]
-parseRaw lf text = reverse (helper [] (lines text))
+-- Parse each line into a list of strings, handling inline comments
+parseRaw :: String -> [String]
+parseRaw text = reverse (helper [] (lines text))
     where
         helper acc [] = acc
-        helper acc (str:strs) = helper (handleComments lf str:acc) strs
+        helper acc (str:strs) = helper (handleComments str:acc) strs
 
+-- Parse a line into a triple, with default of ""
+parseLine :: String -> (String, String, String)
+parseLine line = helper (words line)
+    where
+        helper :: [String] -> (String, String, String)
+        helper [] =             ("", "", "")
+        helper [s1] =           (s1, "", "")
+        helper [s1, s2] =       (s1, s2, "")
+        helper (s1:s2:s3:_) =   (s1, s2, s3)
+
+removeLastColon :: String -> String
+removeLastColon []          = []
+removeLastColon [c, ':']    = [c]
+removeLastColon (c:cs)      = c:(removeLastColon cs)
+
+processNames :: [(String, String, String)] -> [String]
+processNames = map (removeLastColon . fst3)
+
+processPrices :: [(String, String, String)] -> [String]
+processPrices = map (helper . snd3)
+    where
+        helper ('$':ss)  = ss
+        helper str       = str
+
+processLinks :: [(String, String, String)] -> [String]
+processLinks = map (helper . trd3)
+    where
+        helper []           = []
+        helper ('(':str)    = case reverse str of
+                                (')':str') -> reverse str'
+                                str -> str
+        helper str          = str
+
+sumPrices :: [String] -> Float
+sumPrices strs = sum (map helper strs)
+    where
+        helper str = case readMaybe str :: Maybe Float of
+                                Just number -> number
+                                Nothing -> throw (Error ("Error: Malformed Number: " ++ str))
 
 main :: IO ()
 main = do
@@ -215,25 +213,19 @@ main = do
         -- Handle multiline comments
         let parse1 = handleMultilines rawText
 
-        -- Handle inline comments
-        
-        let lf =
-                if "all" `elem` longFlags then
-                    (True, True, True)
-                else
-                    ("prospective" `elem` longFlags, "optional" `elem` longFlags, "unneeded" `elem` longFlags)
-                    
-        let strList = parseRaw lf parse1
+        -- Handle inline comments and separate lines into a list
+        let strList = parseRaw parse1
 
-        -- Get rid of whitespace, and also limit each line to one word, dropping the rest
-        let trimmedList = deleteEmpty (map (firstOrEmpty . words) strList)
+        -- Parse each line into triples, dropping the rest. Also remove invalid triples.
+        let trimmedList = deleteEmpty (map parseLine strList)
         
-        if 'l' `elem` flags then do
-                putStrLn (listToPrint ((removeDups . extractHeaders) trimmedList))
-        else if 'e' `elem` flags then do
-            putStrLn (listToPrint (excludeModules arguments trimmedList))
-        else if 'm' `elem` flags then do
-            putStrLn (listToPrint (specifyModules arguments trimmedList))
+        if "sum" `elem` longFlags then do
+            print ((sumPrices . processPrices) trimmedList)
+        else if "names" `elem` longFlags then do
+            putStrLn (listToPrint (processNames trimmedList))
+        else if "prices" `elem` longFlags then do
+            putStrLn (listToPrint (processPrices trimmedList))
+        else if "links" `elem` longFlags then do
+            putStrLn (listToPrint (processLinks trimmedList))
         else do
-            let finalList = filterAllHeaders trimmedList
-            putStrLn (listToPrint finalList)
+            throw (Error "No arguments specified")
