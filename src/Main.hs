@@ -36,7 +36,7 @@ helpMessage :: String
 helpMessage = "hai"
 
 listToPrint :: [String] -> String
-listToPrint = unwords
+listToPrint = intercalate "\n" 
 
 possibleFlags :: String
 possibleFlags = "h"
@@ -147,23 +147,50 @@ parseRaw text = reverse (helper [] (lines text))
         helper acc [] = acc
         helper acc (str:strs) = helper (handleComments str:acc) strs
 
+-- Splits a string into a tuple at the given delimiter character
+splitHalfAt :: Char -> String -> (String, String)
+splitHalfAt c str = helper c ("", str)
+    where
+        helper delim (s1, s2) = case s2 of
+            []         -> (reverse s1, s2)
+            (c:cs)
+                | c == delim -> (reverse s1, cs)
+                | otherwise -> helper delim (c:s1, cs)
+            
+-- Takes the first two elements of a list and turns them into a tuple
+listToTuple :: [String] -> (String, String)
+listToTuple []          = ("null", "null")
+listToTuple [s1]        = (s1, "null")
+listToTuple (s1:s2:_)   = (s1, s2)
+
 -- Parse a line into a triple, with default of ""
 parseLine :: String -> (String, String, String)
-parseLine line = helper (words line)
-    where
-        helper :: [String] -> (String, String, String)
-        helper [] =             ("", "", "")
-        helper [s1] =           (s1, "", "")
-        helper [s1, s2] =       (s1, s2, "")
-        helper (s1:s2:s3:_) =   (s1, s2, s3)
+parseLine line = 
+    let (s1, sx) = splitHalfAt ':' line in
+    let (s2, s3) = listToTuple (words sx) in
+    (s1, s2, s3)
 
+{-
 removeLastColon :: String -> String
 removeLastColon []          = []
 removeLastColon [c, ':']    = [c]
 removeLastColon (c:cs)      = c:(removeLastColon cs)
+-}
+
+stripParens :: String -> String
+stripParens [] = []
+stripParens ('(':str)    = case reverse str of
+    (')':str') -> reverse str'
+    str -> str
+stripParens str          = str
+
+extractFloat :: String -> Float
+extractFloat str = case readMaybe str :: Maybe Float of
+    Just number -> number
+    Nothing -> throw (Error ("Error: Malformed Number: " ++ str))
 
 processNames :: [(String, String, String)] -> [String]
-processNames = map (removeLastColon . fst3)
+processNames = map fst3
 
 processPrices :: [(String, String, String)] -> [String]
 processPrices = map (helper . snd3)
@@ -171,21 +198,11 @@ processPrices = map (helper . snd3)
         helper ('$':ss)  = ss
         helper str       = str
 
-processLinks :: [(String, String, String)] -> [String]
-processLinks = map (helper . trd3)
-    where
-        helper []           = []
-        helper ('(':str)    = case reverse str of
-                                (')':str') -> reverse str'
-                                str -> str
-        helper str          = str
-
 sumPrices :: [String] -> Float
-sumPrices strs = sum (map helper strs)
-    where
-        helper str = case readMaybe str :: Maybe Float of
-                                Just number -> number
-                                Nothing -> throw (Error ("Error: Malformed Number: " ++ str))
+sumPrices strs = sum (map extractFloat strs)
+
+processLinks :: [(String, String, String)] -> [String]
+processLinks = map (stripParens . trd3)
 
 main :: IO ()
 main = do
