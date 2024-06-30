@@ -8,7 +8,7 @@ Note: this readme sucks lol
 # INSTALLATION
 - Install ghc using ghcup if you haven't already
 - Run 'make' in the repo directory
-- You now have a binary for spoober located at src/bin/Main
+- You now have a binary for spoobmoney located at src/bin/Main
 - Move src/bin/Main anywhere you like, and rename it whatever you want (only if the name is "spoobmoney")
 (very professional and cool installation instructions)
 
