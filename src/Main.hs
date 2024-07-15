@@ -33,7 +33,7 @@ trd3 :: (a,b,c) -> c
 trd3 (_,_,z) = z
 
 helpMessage :: String
-helpMessage = "hai"
+helpMessage = "Usage: spoobmoney [FLAGS] <FILE>\n\nThe program will error if no flags are specified.\n(Note: Only one flag will be acknowledged by the program.)\n(To avoid unintended output, please only specify a single flag.)\n\nFLAGS:\n\t-h, --help:\tDisplay this help message\n\n\t--sum:\t\tOutput the total cost of the list\n\t--names:\tOutput the names of all items\n\t--prices:\tOutput the prices of all items\n\t--links:\tOutput the links of all items\n\nFILE:\n\tThe infile to read\n\nFile format specification:\n\tWhitespace will be ignored.\n\n\tEach line will be formatted as follows:\n\t\t<name>: $<price> (<link>)\n"
 
 listToPrint :: [String] -> String
 listToPrint = intercalate "\n" 
@@ -41,7 +41,7 @@ listToPrint = intercalate "\n"
 possibleFlags :: String
 possibleFlags = "h"
 possibleLFlags :: [String]
-possibleLFlags = ["sum", "names", "prices", "links"]
+possibleLFlags = ["help", "sum", "names", "prices", "links"]
 
 -- triple: (name, cost, link)
 
@@ -209,7 +209,7 @@ main = do
     args <- getArgs
     let (argv, flags, longFlags) = parseArgs args
 
-    if 'h' `elem` flags then do
+    if ('h' `elem` flags) || ("help" `elem` longFlags) then do
         putStrLn helpMessage
     else do
         when (null argv)                $ throw (Error "Error: No arguments specified")
